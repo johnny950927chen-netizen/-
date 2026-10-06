@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>時光勇者：遊戲化專注 RPG (Focus Hero RPG)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        rpg: {
+                            bg: '#0F172A',
+                            card: '#1E293B',
+                            border: '#334155',
+                            accent: '#8B5CF6',
+                            gold: '#F59E0B',
+                            exp: '#10B981',
+                            hp: '#EF4444',
+                            mana: '#3B82F6'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Microsoft JhengHei', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.8); }
+        }
+        .glow-active {
+            animation: pulse-glow 2s infinite;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-rpg-bg text-slate-100 font-sans min-h-screen flex flex-col justify-between selection:bg-purple-500 selection:text-white">
+
+    <!-- Top Bar / Navbar -->
+    <header class="sticky top-0 z-40 w-full glass-card border-b border-slate-700/50 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <!-- App Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
+                    <i class="fa-solid font-bold fa-shield-halved text-xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-amber-300">
+                        時光勇者 FOCUS HERO
+                    </h1>
+                    <p class="text-xs text-slate-400">遊戲化番茄鐘與冒險日誌</p>
+                </div>
+            </div>
+
+            <!-- Player Status Quick View Header -->
+            <div id="player-header-stats" class="flex items-center gap-4 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700/60 text-sm">
+                <!-- Level -->
+                <div class="flex items-center gap-2">
+                    <span id="header-level-badge" class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 text-xs">
+                        Lv.1
+                    </span>
+                    <span id="header-class-title" class="font-semibold text-slate-200">初級冒險家</span>
+                </div>
+
+                <div class="h-4 w-px bg-slate-700"></div>
+
+                <!-- EXP Bar -->
+                <div class="flex flex-col w-28 sm:w-36 gap-1">
+                    <div class="flex justify-between text-[10px] text-slate-400">
+                        <span>EXP</span>
+                        <span id="header-exp-text">0/100</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-700">
+                        <div id="header-exp-bar" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full w-0% transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <div class="h-4 w-px bg-slate-700"></div>
+
+                <!-- Gold -->
+                <div class="flex items-center gap-1.5 text-amber-400 font-bold">
+                    <i class="fa-solid fa-coins text-amber-400"></i>
+                    <span id="header-gold">0</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow">
+        
+        <!-- LEFT / MAIN COLUMN: Timer & Active Task (7 Cols) -->
+        <section class="lg:col-span-7 flex flex-col gap-6">
+            
+            <!-- Timer Card -->
+            <div id="timer-card" class="glass-card rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-300">
+                <!-- Ambient Glow Background -->
+                <div id="timer-glow" class="absolute -top-24 -left-24 w-72 h-72 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <!-- Timer Mode Selector Buttons -->
+                <div class="flex items-center gap-2 bg-slate-900/80 p-1.5 rounded-xl border border-slate-700/80 mb-6 z-10">
+                    <button id="mode-focus" onclick="setTimerMode('focus')" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-purple-600 text-white shadow-md">
+                        <i class="fa-solid fa-fire mr-1"></i> 專注 (25m)
+                    </button>
+                    <button id="mode-short" onclick="setTimerMode('short')" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200">
+                        <i class="fa-solid fa-mug-hot mr-1"></i> 短暫休息 (5m)
+                    </button>
+                    <button id="mode-long" onclick="setTimerMode('long')" class="px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200">
+                        <i class="fa-solid fa-bed mr-1"></i> 長休息 (15m)
+                    </button>
+                </div>
+
+                <!-- Circular SVG Progress Timer -->
+                <div class="relative w-64 h-64 sm:w-72 sm:h-72 my-2 flex items-center justify-center z-10">
+                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <!-- Background Circle -->
+                        <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="6" class="text-slate-800" fill="transparent" />
+                        <!-- Progress Circle -->
+                        <circle id="timer-progress" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="6" 
+                                class="text-purple-500 transition-all duration-500 ease-linear" 
+                                fill="transparent" stroke-dasharray="263.89" stroke-dashoffset="0" stroke-linecap="round" />
+                    </svg>
+
+                    <!-- Time & Streak Display Inside Circle -->
+                    <div class="absolute flex flex-col items-center justify-center text-center">
+                        <span id="timer-display" class="text-5xl sm:text-6xl font-extrabold tracking-tight font-mono text-white drop-shadow-md">
+                            25:00
+                        </span>
+                        <span id="active-mode-label" class="text-xs uppercase tracking-widest text-purple-400 font-semibold mt-2">
+                            戰鬥準備中
+                        </span>
+                        <!-- Streak Counter Badge -->
+                        <div class="mt-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold">
+                            <i class="fa-solid fa-bolt"></i> 連續專注: <span id="streak-count">0</span> 次
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timer Control Buttons -->
+                <div class="flex items-center gap-4 mt-6 z-10">
+                    <button id="btn-start" onclick="toggleTimer()" class="px-8 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-base shadow-lg shadow-purple-600/30 active:scale-95 transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-play"></i> 開始戰鬥
+                    </button>
+                    <button id="btn-reset" onclick="resetTimer()" class="p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold border border-slate-700 active:scale-95 transition-all" title="重置時間">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button id="btn-skip" onclick="skipTimer()" class="p-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold border border-slate-700 active:scale-95 transition-all" title="跳過此階段">
+                        <i class="fa-solid fa-forward-step"></i>
+                    </button>
+                </div>
+
+                <!-- Web Audio White Noise / Ambient Generator Controls -->
+                <div class="mt-6 flex items-center gap-3 bg-slate-900/60 px-4 py-2 rounded-xl border border-slate-700/50 text-xs text-slate-300 z-10">
+                    <i class="fa-solid fa-headphones text-purple-400"></i>
+                    <span>白噪音環境音:</span>
+                    <button id="noise-toggle" onclick="toggleWhiteNoise()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 transition">
+                        開啟 (Brownian Noise)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Task Management Card -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-scroll text-purple-400"></i>
+                        <h2 class="font-bold text-lg text-slate-100">冒險任務清單 (Quests)</h2>
+                    </div>
+                    <span class="text-xs text-slate-400">完成任務獲得額外 EXP 與金幣</span>
+                </div>
+
+                <!-- Add Task Input Form -->
+                <form id="task-form" onsubmit="handleAddTask(event)" class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="task-input-title" placeholder="輸入任務名稱 (例如：研讀演算法、撰寫報告...)" required
+                           class="flex-grow bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500">
+                    
+                    <select id="task-input-tag" class="bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-purple-500">
+                        <option value="程式碼">💻 程式碼</option>
+                        <option value="閱讀">📚 閱讀</option>
+                        <option value="數學">📐 數學</option>
+                        <option value="語言">🗣️ 語言</option>
+                        <option value="雜項">⚔️ 雜項</option>
+                    </select>
+
+                    <input type="number" id="task-input-pomo" min="1" max="10" value="1" title="預計番茄數" placeholder="預估"
+                           class="w-20 bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-center text-slate-100 focus:outline-none focus:border-purple-500">
+
+                    <button type="submit" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-1 shadow-md">
+                        <i class="fa-solid fa-plus"></i> 新增
+                    </button>
+                </form>
+
+                <!-- Active Task Focus Banner -->
+                <div id="active-task-banner" class="hidden bg-purple-900/30 border border-purple-500/40 rounded-xl p-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="p-2 rounded-lg bg-purple-600/30 text-purple-300 text-xs">當前專注中</span>
+                        <span id="active-task-title" class="font-semibold text-sm text-purple-100">---</span>
+                    </div>
+                    <button onclick="clearActiveTask()" class="text-xs text-slate-400 hover:text-slate-200">取消綁定</button>
+                </div>
+
+                <!-- Tasks Scrollable List -->
+                <div id="tasks-container" class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+                    <!-- Dynamic rendering via JS -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- RIGHT COLUMN: Character RPG Stats, Shop & Analytics (5 Cols) -->
+        <section class="lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- Character Card -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col gap-4 relative overflow-hidden">
+                <div class="flex items-center gap-4">
+                    <!-- Avatar Badge -->
+                    <div id="character-avatar" class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-purple-600 flex items-center justify-center text-3xl text-white shadow-lg border border-purple-400/30">
+                        🧙‍♂️
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 id="character-name" class="font-bold text-lg text-slate-100">時光勇者</h3>
+                            <span id="character-title-tag" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-amber-300 border border-amber-500/30">
+                                無稱號
+                            </span>
+                        </div>
+                        <p id="character-class" class="text-xs text-purple-300 mt-0.5">Focus Mage · 專注魔導士</p>
+                        <p class="text-[11px] text-slate-400 mt-1">累積總專注時長: <span id="total-focus-min" class="text-slate-200 font-bold">0</span> 分鐘</p>
+                    </div>
+                </div>
+
+                <!-- Attributes Detail Bar -->
+                <div class="grid grid-cols-2 gap-3 mt-2 bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 text-xs">
+                    <div>
+                        <span class="text-slate-400">生命值 (HP / 專注專注度):</span>
+                        <div class="w-full bg-slate-800 h-2 rounded-full mt-1 overflow-hidden">
+                            <div class="bg-rpg-hp h-full w-full"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="text-slate-400">魔力值 (MP / 意志力):</span>
+                        <div class="w-full bg-slate-800 h-2 rounded-full mt-1 overflow-hidden">
+                            <div class="bg-rpg-mana h-full w-full"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shop & Achievements Tabs Card -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col gap-4">
+                <div class="flex border-b border-slate-700/60">
+                    <button id="tab-btn-shop" onclick="switchRightTab('shop')" class="px-4 py-2 font-bold text-sm border-b-2 border-purple-500 text-purple-400">
+                        <i class="fa-solid fa-store mr-1"></i> 道具商店
+                    </button>
+                    <button id="tab-btn-achieve" onclick="switchRightTab('achieve')" class="px-4 py-2 font-bold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+                        <i class="fa-solid fa-trophy mr-1"></i> 成就與徽章
+                    </button>
+                    <button id="tab-btn-stats" onclick="switchRightTab('stats')" class="px-4 py-2 font-bold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+                        <i class="fa-chart-pie fa-solid mr-1"></i> 統計報表
+                    </button>
+                </div>
+
+                <!-- TAB 1: Shop View -->
+                <div id="tab-content-shop" class="flex flex-col gap-3">
+                    <p class="text-xs text-slate-400">花費專注獲得的金幣購買道具或稱號：</p>
+                    <div id="shop-items-grid" class="grid grid-cols-1 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                        <!-- Dynamic Shop Items loaded via JS -->
+                    </div>
+                </div>
+
+                <!-- TAB 2: Achievements View -->
+                <div id="tab-content-achieve" class="hidden flex-col gap-3">
+                    <p class="text-xs text-slate-400">完成專注里程碑可領取豐厚經驗與獎勵：</p>
+                    <div id="achievements-container" class="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+                        <!-- Dynamic Achievements loaded via JS -->
+                    </div>
+                </div>
+
+                <!-- TAB 3: Statistics Chart View -->
+                <div id="tab-content-stats" class="hidden flex-col gap-4">
+                    <p class="text-xs text-slate-400">近期的專注時長與分類統計：</p>
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700/60">
+                        <canvas id="focusChart" class="w-full h-44"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Controls / Storage Reset -->
+            <div class="flex justify-between items-center text-xs text-slate-500 px-2">
+                <span><i class="fa-solid fa-floppy-disk text-slate-400 mr-1"></i> 進度自動儲存於 LocalStorage</span>
+                <button onclick="confirmResetData()" class="text-red-400 hover:text-red-300 underline">
+                    重置所有遊戲檔案
+                </button>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full border-t border-slate-800 py-4 px-6 text-center text-xs text-slate-500">
+        <p>時光勇者 Focus Hero RPG &copy; 2026 - 運用 Vibe Coding 打造的互動式 Pomodoro 網頁</p>
+    </footer>
+
+    <script>
+        /* ==========================================================================
+           1. Application State & Storage Defaults
+           ========================================================================== */
+        const DEFAULT_STATE = {
+            player: {
+                level: 1,
+                exp: 0,
+                maxExp: 100,
+                gold: 50,
+                totalFocusMinutes: 0,
+                streak: 0,
+                activeTitle: "初級冒險家",
+                avatarEmoji: "🧙‍♂️"
+            },
+            tasks: [
+                { id: 1, title: "完成專注網頁程式碼撰寫", tag: "程式碼", estPomo: 2, completedPomo: 1, done: false },
+                { id: 2, title: "閱讀 Gamification 設計書籍", tag: "閱讀", estPomo: 3, completedPomo: 0, done: false }
+            ],
+            inventory: [],
+            achievements: [
+                { id: 'first_pomo', title: '初露鋒芒', desc: '完成第 1 個專注番茄鐘', exp: 50, gold: 30, claimed: false, req: 1 },
+                { id: 'pomo_5', title: '專注新兵', desc: '累積完成 5 個專注番茄鐘', exp: 150, gold: 100, claimed: false, req: 5 },
+                { id: 'pomo_10', title: '時光大師', desc: '累積完成 10 個專注番茄鐘', exp: 350, gold: 250, claimed: false, req: 10 }
+            ],
+            statsHistory: {
+                "程式碼": 25,
+                "閱讀": 0,
+                "數學": 0,
+                "語言": 0,
+                "雜項": 0
+            },
+            completedSessionsCount: 0
+        };
+
+        let state = JSON.parse(localStorage.getItem('focus_hero_rpg_state')) || DEFAULT_STATE;
+
+        function saveState() {
+            localStorage.setItem('focus_hero_rpg_state', JSON.stringify(state));
+            renderPlayerUI();
+        }
+
+        /* ==========================================================================
+           2. Web Audio API Sound Synthesizer (No external audio files needed!)
+           ========================================================================== */
+        let audioCtx = null;
+        let whiteNoiseNode = null;
+        let isNoisePlaying = false;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        // Play pleasant synthesized chime / fanfare
+        function playSound(type) {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+
+                if (type === 'complete') {
+                    // Success Chime: C5, E5, G5, C6
+                    const freqs = [523.25, 659.25, 783.99, 1046.50];
+                    freqs.forEach((f, index) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(f, now + index * 0.12);
+                        gain.gain.setValueAtTime(0.3, now + index * 0.12);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + index * 0.12 + 0.4);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(now + index * 0.12);
+                        osc.stop(now + index * 0.12 + 0.4);
+                    });
+                } else if (type === 'levelup') {
+                    // Level-up Fanfare
+                    const notes = [440, 554.37, 659.25, 880];
+                    notes.forEach((f, idx) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(f, now + idx * 0.15);
+                        gain.gain.setValueAtTime(0.4, now + idx * 0.15);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.15 + 0.6);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(now + idx * 0.15);
+                        osc.stop(now + idx * 0.15 + 0.6);
+                    });
+                } else if (type === 'click') {
+                    // Simple interface click
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, now);
+                    osc.frequency.exponentialRampToValueAtTime(400, now + 0.05);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                }
+            } catch (e) {
+                console.log('Audio playing prevented or not supported:', e);
+            }
+        }
+
+        // Toggle Brownian Ambient White Noise
+        function toggleWhiteNoise() {
+            const ctx = getAudioContext();
+            const btn = document.getElementById('noise-toggle');
+
+            if (isNoisePlaying) {
+                if (whiteNoiseNode) {
+                    whiteNoiseNode.stop();
+                    whiteNoiseNode.disconnect();
+                    whiteNoiseNode = null;
+                }
+                isNoisePlaying = false;
+                btn.innerText = "開啟 (Brownian Noise)";
+                btn.classList.remove('bg-purple-600', 'text-white');
+                btn.classList.add('bg-slate-800', 'text-slate-200');
+            } else {
+                // Generate Brownian Noise buffer
+                const bufferSize = ctx.sampleRate * 2;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const output = buffer.getChannelData(0);
+                let lastOut = 0.0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    output[i] = (lastOut + (0.02 * white)) / 1.02;
+                    lastOut = output[i];
+                    output[i] *= 3.5; // Gain boost
+                }
+
+                whiteNoiseNode = ctx.createBufferSource();
+                whiteNoiseNode.buffer = buffer;
+                whiteNoiseNode.loop = true;
+
+                const gainNode = ctx.createGain();
+                gainNode.gain.value = 0.08; // Gentle background volume
+
+                whiteNoiseNode.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                whiteNoiseNode.start();
+
+                isNoisePlaying = true;
+                btn.innerText = "關閉噪音";
+                btn.classList.add('bg-purple-600', 'text-white');
+                btn.classList.remove('bg-slate-800');
+            }
+        }
+
+        /* ==========================================================================
+           3. Pomodoro Timer Logic
+           ========================================================================== */
+        const TIMER_MODES = {
+            focus: { name: '專注戰鬥', minutes: 25, color: 'text-purple-500' },
+            short: { name: '短暫休息', minutes: 5, color: 'text-emerald-400' },
+            long: { name: '長休息', minutes: 15, color: 'text-blue-400' }
+        };
+
+        let currentMode = 'focus';
+        let timeLeftSeconds = TIMER_MODES.focus.minutes * 60;
+        let totalModeSeconds = TIMER_MODES.focus.minutes * 60;
+        let timerInterval = null;
+        let isRunning = false;
+        let activeTaskId = null;
+
+        function setTimerMode(mode) {
+            playSound('click');
+            if (isRunning) resetTimer();
+            
+            currentMode = mode;
+            totalModeSeconds = TIMER_MODES[mode].minutes * 60;
+            timeLeftSeconds = totalModeSeconds;
+
+            // Highlight active button
+            ['focus', 'short', 'long'].forEach(m => {
+                const btn = document.getElementById(`mode-${m}`);
+                if (m === mode) {
+                    btn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-purple-600 text-white shadow-md";
+                } else {
+                    btn.className = "px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200";
+                }
+            });
+
+            document.getElementById('active-mode-label').innerText = TIMER_MODES[mode].name;
+            updateTimerDisplay();
+        }
+
+        function toggleTimer() {
+            playSound('click');
+            const btn = document.getElementById('btn-start');
+            const timerCard = document.getElementById('timer-card');
+
+            if (isRunning) {
+                // Pause Timer
+                clearInterval(timerInterval);
+                isRunning = false;
+                btn.innerHTML = `<i class="fa-solid fa-play"></i> 繼續戰鬥`;
+                btn.className = "px-8 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-base shadow-lg active:scale-95 transition-all flex items-center gap-2";
+                timerCard.classList.remove('glow-active');
+            } else {
+                // Start Timer
+                isRunning = true;
+                btn.innerHTML = `<i class="fa-solid fa-pause"></i> 暫停`;
+                btn.className = "px-8 py-3.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-base shadow-lg shadow-amber-600/30 active:scale-95 transition-all flex items-center gap-2";
+                timerCard.classList.add('glow-active');
+
+                timerInterval = setInterval(() => {
+                    timeLeftSeconds--;
+                    updateTimerDisplay();
+
+                    if (timeLeftSeconds <= 0) {
+                        clearInterval(timerInterval);
+                        isRunning = false;
+                        timerCard.classList.remove('glow-active');
+                        onTimerComplete();
+                    }
+                }, 1000);
+            }
+        }
+
+        function resetTimer() {
+            playSound('click');
+            if (timerInterval) clearInterval(timerInterval);
+            isRunning = false;
+            timeLeftSeconds = totalModeSeconds;
+            
+            const btn = document.getElementById('btn-start');
+            btn.innerHTML = `<i class="fa-solid fa-play"></i> 開始戰鬥`;
+            btn.className = "px-8 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-base shadow-lg active:scale-95 transition-all flex items-center gap-2";
+            document.getElementById('timer-card').classList.remove('glow-active');
+            
+            updateTimerDisplay();
+        }
+
+        function skipTimer() {
+            playSound('click');
+            if (confirm("確定要跳過這個階段嗎？")) {
+                resetTimer();
+            }
+        }
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(timeLeftSeconds / 60);
+            const secs = timeLeftSeconds % 60;
+            const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            
+            document.getElementById('timer-display').innerText = formatted;
+            document.title = `(${formatted}) 時光勇者 FOCUS HERO`;
+
+            // SVG Circular Progress Ring Update (Circumference = 2 * PI * r = 263.89)
+            const circle = document.getElementById('timer-progress');
+            const circumference = 263.89;
+            const progress = (totalModeSeconds - timeLeftSeconds) / totalModeSeconds;
+            const offset = circumference * (1 - progress);
+            circle.style.strokeDashoffset = offset;
+        }
+
+        /* ==========================================================================
+           4. Timer Completion Rewards & RPG Mechanics
+           ========================================================================== */
+        function onTimerComplete() {
+            playSound('complete');
+
+            if (currentMode === 'focus') {
+                const sessionMinutes = TIMER_MODES.focus.minutes;
+                state.player.streak += 1;
+                state.completedSessionsCount += 1;
+                state.player.totalFocusMinutes += sessionMinutes;
+
+                // Base rewards
+                let earnedExp = 50 + (state.player.streak * 5); // Streak multiplier
+                let earnedGold = 20 + (state.player.streak * 2);
+
+                // Update task progress if linked
+                if (activeTaskId) {
+                    const task = state.tasks.find(t => t.id === activeTaskId);
+                    if (task) {
+                        task.completedPomo += 1;
+                        // Add task tag focus stats
+                        state.statsHistory[task.tag] = (state.statsHistory[task.tag] || 0) + sessionMinutes;
+                        earnedExp += 20; // Active task bonus
+                    }
+                } else {
+                    state.statsHistory["雜項"] += sessionMinutes;
+                }
+
+                addPlayerExpAndGold(earnedExp, earnedGold);
+                checkAchievements();
+
+                alert(`🎉 專注戰鬥勝利！\n獲得經驗 +${earnedExp} EXP，金幣 +${earnedGold} G\n連續專注達成 ${state.player.streak} 次！`);
+                setTimerMode('short'); // Auto switch to short break
+            } else {
+                alert(`☕ 休息結束！準備好開始下一場戰鬥了嗎？`);
+                setTimerMode('focus');
+            }
+
+            saveState();
+            renderTasks();
+            renderAchievements();
+            updateChart();
+        }
+
+        function addPlayerExpAndGold(expGained, goldGained) {
+            state.player.exp += expGained;
+            state.player.gold += goldGained;
+
+            // Check level up
+            if (state.player.exp >= state.player.maxExp) {
+                state.player.level += 1;
+                state.player.exp -= state.player.maxExp;
+                state.player.maxExp = Math.floor(state.player.maxExp * 1.3); // Scale requirement
+                playSound('levelup');
+
+                // Class updates on milestones
+                if (state.player.level === 3) state.player.activeTitle = "時光學徒";
+                if (state.player.level === 5) state.player.activeTitle = "專注騎士";
+                if (state.player.level === 10) state.player.activeTitle = "深層專注大導師";
+
+                setTimeout(() => {
+                    alert(`🌟 ✨ LEVEL UP! ✨ 🌟\n恭喜升級至 Lv.${state.player.level}！\n獲得新的力量與冒險稱號：【${state.player.activeTitle}】`);
+                }, 300);
+            }
+        }
+
+        /* ==========================================================================
+           5. Tasks Management Logic
+           ========================================================================== */
+        function handleAddTask(e) {
+            e.preventDefault();
+            playSound('click');
+
+            const titleInput = document.getElementById('task-input-title');
+            const tagInput = document.getElementById('task-input-tag');
+            const pomoInput = document.getElementById('task-input-pomo');
+
+            const newTask = {
+                id: Date.now(),
+                title: titleInput.value.trim(),
+                tag: tagInput.value,
+                estPomo: parseInt(pomoInput.value) || 1,
+                completedPomo: 0,
+                done: false
+            };
+
+            state.tasks.push(newTask);
+            titleInput.value = '';
+            
+            saveState();
+            renderTasks();
+        }
+
+        function toggleTaskDone(taskId) {
+            playSound('click');
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.done = !task.done;
+                if (task.done) {
+                    addPlayerExpAndGold(30, 15); // Completion quest bonus
+                }
+                saveState();
+                renderTasks();
+            }
+        }
+
+        function deleteTask(taskId) {
+            playSound('click');
+            if (activeTaskId === taskId) clearActiveTask();
+            state.tasks = state.tasks.filter(t => t.id !== taskId);
+            saveState();
+            renderTasks();
+        }
+
+        function setActiveTask(taskId) {
+            playSound('click');
+            activeTaskId = taskId;
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task) {
+                const banner = document.getElementById('active-task-banner');
+                const title = document.getElementById('active-task-title');
+                banner.classList.remove('hidden');
+                title.innerText = `[${task.tag}] ${task.title} (${task.completedPomo}/${task.estPomo} 番茄)`;
+            }
+            renderTasks();
+        }
+
+        function clearActiveTask() {
+            activeTaskId = null;
+            document.getElementById('active-task-banner').classList.add('hidden');
+            renderTasks();
+        }
+
+        function renderTasks() {
+            const container = document.getElementById('tasks-container');
+            if (state.tasks.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 text-center py-4">目前沒有任務，新增一個任務開始專注吧！</p>`;
+                return;
+            }
+
+            container.innerHTML = state.tasks.map(task => `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/70 border ${activeTaskId === task.id ? 'border-purple-500 bg-purple-950/20' : 'border-slate-800'} transition hover:border-slate-700">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <input type="checkbox" ${task.done ? 'checked' : ''} onclick="toggleTaskDone(${task.id})" class="w-4 h-4 rounded accent-purple-600 cursor-pointer">
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-sm font-medium ${task.done ? 'line-through text-slate-500' : 'text-slate-200'} truncate">
+                                ${task.title}
+                            </span>
+                            <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                                <span class="px-1.5 py-0.2 rounded bg-slate-800 border border-slate-700">${task.tag}</span>
+                                <span>🍅 ${task.completedPomo}/${task.estPomo}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        ${!task.done ? `
+                            <button onclick="setActiveTask(${task.id})" class="px-2 py-1 text-xs rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 transition">
+                                ${activeTaskId === task.id ? '專注中' : '選擇專注'}
+                            </button>
+                        ` : ''}
+                        <button onclick="deleteTask(${task.id})" class="text-slate-500 hover:text-red-400 p-1 transition">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        /* ==========================================================================
+           6. Shop & Achievements System
+           ========================================================================== */
+        const SHOP_ITEMS = [
+            { id: 'item_coffee', name: '體力藥水 (星巴克專注美式)', price: 40, icon: '☕', desc: '恢復精力，稱號改為【咖啡騎士】', titleUnlock: '咖啡騎士' },
+            { id: 'item_badge_cyber', name: '賽博朋克冒險徽章', price: 100, icon: '🤖', desc: '解鎖頭像【🤖】，升級風格', avatarUnlock: '🤖' },
+            { id: 'item_title_master', name: '專注宗師傳奇頭銜', price: 200, icon: '👑', desc: '稱號升級為【專注宗師】', titleUnlock: '專注宗師' }
+        ];
+
+        function renderShop() {
+            const container = document.getElementById('shop-items-grid');
+            container.innerHTML = SHOP_ITEMS.map(item => {
+                const bought = state.inventory.includes(item.id);
+                return `
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">${item.icon}</span>
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-200">${item.name}</h4>
+                                <p class="text-[11px] text-slate-400">${item.desc}</p>
+                            </div>
+                        </div>
+                        <button onclick="buyShopItem('${item.id}')" ${bought ? 'disabled' : ''}
+                                class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${bought ? 'bg-slate-800 text-slate-500 border border-slate-700' : 'bg-amber-500 hover:bg-amber-400 text-slate-950'}">
+                            ${bought ? '已擁有' : `💰 ${item.price} G`}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function buyShopItem(itemId) {
+            playSound('click');
+            const item = SHOP_ITEMS.find(i => i.id === itemId);
+            if (!item) return;
+
+            if (state.player.gold >= item.price) {
+                state.player.gold -= item.price;
+                state.inventory.push(item.id);
+
+                if (item.titleUnlock) state.player.activeTitle = item.titleUnlock;
+                if (item.avatarUnlock) state.player.avatarEmoji = item.avatarUnlock;
+
+                saveState();
+                renderShop();
+                alert(`🎁 成功購買【${item.name}】！`);
+            } else {
+                alert("❌ 金幣不足！完成更多專注番茄鐘來賺取金幣吧。");
+            }
+        }
+
+        function checkAchievements() {
+            state.achievements.forEach(ach => {
+                if (!ach.claimed && state.completedSessionsCount >= ach.req) {
+                    ach.claimed = true;
+                    addPlayerExpAndGold(ach.exp, ach.gold);
+                    alert(`🏆 解鎖成就：【${ach.title}】！\n獎勵: EXP +${ach.exp}, 金幣 +${ach.gold} G`);
+                }
+            });
+        }
+
+        function renderAchievements() {
+            const container = document.getElementById('achievements-container');
+            container.innerHTML = state.achievements.map(ach => `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border ${ach.claimed ? 'border-emerald-500/40 bg-emerald-950/10' : 'border-slate-800'}">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-trophy ${ach.claimed ? 'text-amber-400' : 'text-slate-600'} text-lg"></i>
+                        <div>
+                            <h4 class="text-xs font-bold text-slate-200">${ach.title}</h4>
+                            <p class="text-[11px] text-slate-400">${ach.desc}</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold ${ach.claimed ? 'text-emerald-400' : 'text-slate-500'}">
+                        ${ach.claimed ? '已解鎖 ✓' : `${state.completedSessionsCount}/${ach.req}`}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        /* ==========================================================================
+           7. Chart.js Analytics View
+           ========================================================================== */
+        let focusChartInstance = null;
+
+        function initChart() {
+            const ctx = document.getElementById('focusChart').getContext('2d');
+            focusChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(state.statsHistory),
+                    datasets: [{
+                        data: Object.values(state.statsHistory),
+                        backgroundColor: [
+                            '#8B5CF6', '#10B981', '#F59E0B', '#3B82F6', '#64748B'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#94a3b8', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            if (focusChartInstance) {
+                focusChartInstance.data.datasets[0].data = Object.values(state.statsHistory);
+                focusChartInstance.update();
+            }
+        }
+
+        /* ==========================================================================
+           8. Tab Switcher & Render Helper Functions
+           ========================================================================== */
+        function switchRightTab(tab) {
+            playSound('click');
+            ['shop', 'achieve', 'stats'].forEach(t => {
+                document.getElementById(`tab-content-${t}`).className = (t === tab) ? "flex flex-col gap-3" : "hidden";
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if (t === tab) {
+                    btn.className = "px-4 py-2 font-bold text-sm border-b-2 border-purple-500 text-purple-400";
+                } else {
+                    btn.className = "px-4 py-2 font-bold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200";
+                }
+            });
+        }
+
+        function renderPlayerUI() {
+            // Header stats
+            document.getElementById('header-level-badge').innerText = `Lv.${state.player.level}`;
+            document.getElementById('header-class-title').innerText = state.player.activeTitle;
+            document.getElementById('header-exp-text').innerText = `${state.player.exp}/${state.player.maxExp}`;
+            document.getElementById('header-gold').innerText = state.player.gold;
+            document.getElementById('streak-count').innerText = state.player.streak;
+
+            const expPct = Math.min(100, Math.floor((state.player.exp / state.player.maxExp) * 100));
+            document.getElementById('header-exp-bar').style.width = `${expPct}%`;
+
+            // Character Card
+            document.getElementById('character-avatar').innerText = state.player.avatarEmoji;
+            document.getElementById('character-title-tag').innerText = state.player.activeTitle;
+            document.getElementById('total-focus-min').innerText = state.player.totalFocusMinutes;
+        }
+
+        function confirmResetData() {
+            if (confirm("⚠️ 確定要重置所有專注記錄與 RPG 角色檔案嗎？此動作無法復原。")) {
+                localStorage.removeItem('focus_hero_rpg_state');
+                location.reload();
+            }
+        }
+
+        /* ==========================================================================
+           9. Application Initialization
+           ========================================================================== */
+        window.onload = function() {
+            renderPlayerUI();
+            renderTasks();
+            renderShop();
+            renderAchievements();
+            initChart();
+            updateTimerDisplay();
+        };
+    </script>
+</body>
+</html>
